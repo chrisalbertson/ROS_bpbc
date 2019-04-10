@@ -1,3 +1,5 @@
+
+
 /*   
     ROS-bpbc.ino
     ROS Blue Pill Base Controler
@@ -25,6 +27,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Twist.h>
 #include <tf/transform_broadcaster.h>
+
+#include <Encoder.h>
+
+// TODO: Change these pin numbers to the pins connected to your encoder.
+//       All pins should have interrupt capability
+Encoder encoderLeft(5, 6);
+Encoder encoderRight(7, 8);
+long encoderLeftLastValue  = 0L;
+long encoderRightLastValue = 0L;
+
 
 #include "MonsterMoto.h"
 
@@ -125,6 +137,15 @@ void loop() {
     // It is time to run, store the NEXT tine to run.
     NextPIDMillis = millis() + PID_PERIOD;
 
+    // Read the encoders and figure out how far we have gone then convert
+    // this distance to velocity and send it to the PID controler.
+    long encLeft  = encoderLeft.read();
+    long encRight = encoderRight.read();
+    leftInput  = float(encLeft  - encoderLeftLastValue)  / float(1000 * PID_PERIOD);
+    rightInput = float(encRight - encoderRightLastValue) / float(1000 * PID_PERIOD);
+
+    //TODO:  Send this odomatery data to the TF broadcaster
+
     // re-compute the the motor drive based on previous measured speed.
     // The PID control tries to keep the motor runing at a constant
     // setpoint speed.  Input and Output are global variables
@@ -155,12 +176,12 @@ void loop() {
       direction = BRAKEGND;
     }
     moto.motorGo(RIGHT_MOTOR, direction, int(0.5 + fabs(rightOutput)));
-  }
-    
 
-  // Send out the transform braodcast if needed then handle any
-  // data movement then jump back to top ofloop
-  broadcastTf();
+    // Send out the transform braodcast
+    broadcastTf();
+  }
+
+  // handle any data movements across the erial interface  
   nh.spinOnce();
 }
 
