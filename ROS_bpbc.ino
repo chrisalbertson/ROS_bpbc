@@ -22,20 +22,40 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <ArduinoHardware.h>
+#include <Arduino.h>
 #include <ros.h>
 #include <ros/time.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Twist.h>
 #include <tf/transform_broadcaster.h>
 
-#include <Encoder.h>
+#include "EncoderBP.h"
 
 // TODO: Change these pin numbers to the pins connected to your encoder.
 //       All pins should have interrupt capability
-Encoder encoderLeft(5, 6);
-Encoder encoderRight(7, 8);
+
+#define ENCPIN1A 1
+#define ENCPIN1B 2
+#define ENCPIN2A 3
+#define ENCPIN2B 4
+
+EncoderBP encoderLeft( ENCPIN1A, ENCPIN1B);
+EncoderBP encoderRight(ENCPIN2A, ENCPIN2B);
+
+
+// The followont two funtions look pointless but are required by the Arduino
+// system because ISPs appearenly can not be non-static members of a class.
+void ispLeft(){
+  encoderLeft.tick();
+}
+void ispRight(){
+  encoderRight.tick();
+}
+
+
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
+
 
 
 #include "MonsterMoto.h"
@@ -88,6 +108,8 @@ char odom[]      = "/odom";
 #define LOOPDELAY 1
 
 
+
+
 // This is an Arduino convention.  Place everything that needs to run just
 // once in the setup() funtion.  The environment will call setup()
 void setup() {
@@ -107,6 +129,16 @@ void setup() {
   //         0000000000111111 
   //         1234567890123456
 #endif // HAVE_LCD 
+
+
+  // Set up interrupt on encoder pins.   NOte the function ispLeft and ispRight
+  // are required by the Arduino sysem because ISPs can not be non-static class
+  // members.
+  attachInterrupt(ENCPIN1A, ispLeft,  CHANGE);
+  attachInterrupt(ENCPIN1B, ispLeft,  CHANGE);
+  attachInterrupt(ENCPIN2A, ispRight, CHANGE);
+  attachInterrupt(ENCPIN2B, ispRight, CHANGE);
+
 
   // Start PID controlers. All we need next is data
   leftWheelPID.SetMode(AUTOMATIC);
@@ -139,8 +171,8 @@ void loop() {
 
     // Read the encoders and figure out how far we have gone then convert
     // this distance to velocity and send it to the PID controler.
-    long encLeft  = encoderLeft.read();
-    long encRight = encoderRight.read();
+    long encLeft  = encoderLeft.getPos();
+    long encRight = encoderRight.getPos();
     leftInput  = float(encLeft  - encoderLeftLastValue)  / float(1000 * PID_PERIOD);
     rightInput = float(encRight - encoderRightLastValue) / float(1000 * PID_PERIOD);
 
