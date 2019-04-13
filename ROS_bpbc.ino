@@ -1,24 +1,24 @@
 
 
-/*   
+/*
     ROS-bpbc.ino
     ROS Blue Pill Base Controler
-    
+
     Author Chris Albertson  albertson.chris@gmail.com
     Copyright April 2019
- 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>. 
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <ArduinoHardware.h>
@@ -45,16 +45,21 @@ EncoderBP encoderRight(ENCPIN2A, ENCPIN2B);
 
 // The followont two funtions look pointless but are required by the Arduino
 // system because ISPs appearenly can not be non-static members of a class.
-void ispLeft(){
+void ispLeft() {
   encoderLeft.tick();
 }
-void ispRight(){
+void ispRight() {
   encoderRight.tick();
 }
 
+// TODO:  meterPerTick needs to be computed from parameters in setup()
+// meter per encoder tick is wheel circumfrence / encoder ticks per wheel revoution
+const float meterPerTick = (0.13 * 3.1415) / (75.0 * 64.0);
 
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
+
+Odometer odom(ticks_per_meter, base_width);
 
 
 
@@ -72,7 +77,7 @@ double leftSetpoint = 0.0;
 double leftInput,  leftOutput;
 double rightSetpoint = 0.0;
 double rightInput, rightOutput;
-double Kp=2, Ki=5, Kd=1;
+double Kp = 2, Ki = 5, Kd = 1;
 
 // Create one PID object for each motor.  The Input and output units
 // will be "meters"
@@ -82,10 +87,10 @@ PID rightWheelPID(&rightInput, &rightOutput, &rightSetpoint, Kp, Ki, Kd, DIRECT)
 // Uses an LCD is optional but make it easy to see what is happening and is
 // the only way to show status if there is not ROS computer connected
 #define HAVE_LCD 1
-#if HAVE_LCD 
-  #include <Wire.h>
-  #include <LiquidCrystal_I2C.h>
-  LiquidCrystal_I2C lcd(0x38);  // Set the LCD I2C address
+#if HAVE_LCD
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x38);  // Set the LCD I2C address
 #endif // HAVE_LCD
 
 // Functions declaratons (silly C-language requirement)
@@ -120,13 +125,13 @@ void setup() {
   moto.motorOff(RIGHT_MOTOR);
   leftSetpoint  = 0.0;
   rightSetpoint = 0.0;
-  
+
 #if HAVE_LCD
   // before talking to ROS or anything else, set up uyjer LCD
   lcd.begin(16, 2);
   lcd.setCursor(0, 1);
   lcd.print("Hello");
-  //         0000000000111111 
+  //         0000000000111111
   //         1234567890123456
 #endif // HAVE_LCD 
 
@@ -152,7 +157,7 @@ void setup() {
 
 
 // The PID period is independent from the loop() period.  This defines
-// the time between updata to the motr speed.
+// the time between updates to the motor speed.
 #define PID_PERIOD 100
 unsigned long NextPIDMillis = 0;
 
@@ -160,7 +165,7 @@ unsigned long NextPIDMillis = 0;
 // This loop() funtion is an arduino convnetion.  It is call by the environment
 // inside a tight lop and runs forever or until the CPU is reset or powered off
 void loop() {
-  
+
 
   // The PID runs every PID_PERIOD milliseconds,  Check if it is time
   if (millis() >= NextPIDMillis) {
@@ -169,51 +174,37 @@ void loop() {
     // It is time to run, store the NEXT tine to run.
     NextPIDMillis = millis() + PID_PERIOD;
 
-    // Read the encoders and figure out how far we have gone then convert
-    // this distance to velocity and send it to the PID controler.
+    // Read the encoders.  If some kind of error has caused a jump by
+    // and unreasonable amout we do NOT want to use the encoder value.
+    // It is better to skip a cycle thenuse invalid data
     long encLeft  = encoderLeft.getPos();
     long encRight = encoderRight.getPos();
-    leftInput  = float(encLeft  - encoderLeftLastValue)  / float(1000 * PID_PERIOD);
-    rightInput = float(encRight - encoderRightLastValue) / float(1000 * PID_PERIOD);
 
-    //TODO:  Send this odomatery data to the TF broadcaster
+    if (!odem.encoderJump(encLeft,  encoderLeftLastValue
+                          encRight, encoderRightLastValue)) {
 
-    // re-compute the the motor drive based on previous measured speed.
-    // The PID control tries to keep the motor runing at a constant
-    // setpoint speed.  Input and Output are global variables
-    leftWheelPID.Compute();
-    rightWheelPID.Compute();
+      // Figure out how far we have gone then convert
+      // this distance to velocity and send it to the PID controler.
+      float distLeft  = meterPerTick * float(encLeft  - encoderLeftLastValue)
+      float distRight = meterPerTick * float(encRight - encoderRightLastValue)
+      leftInput  = distLeft  / float(1000 * PID_PERIOD);
+      rightInput = distRight / float(1000 * PID_PERIOD);
 
-    // Set the controler based on calulation from PID    
-    byte direction;
-    if (     leftOutput >  0.001) {
-      direction = CW;
-    }
-    else if (leftOutput < -0.001) { 
-      direction = CCW;
-    }
-    else {
-      direction = BRAKEGND;
-    }
-    moto.motorGo(LEFT_MOTOR, direction, int(0.5 + fabs(leftOutput)));
 
-    
-    if (     rightOutput >  0.001) {
-      direction = CW;
-    }
-    else if (rightOutput < -0.001) { 
-      direction = CCW;
-    }
-    else {
-      direction = BRAKEGND;
-    }
-    moto.motorGo(RIGHT_MOTOR, direction, int(0.5 + fabs(rightOutput)));
+      // re-compute the the motor drive based on previous measured speed.
+      // The PID control tries to keep the motor runing at a constant
+      // setpoint speed.  Input and Output are global variables
+      leftWheelPID.Compute();
+      rightWheelPID.Compute();
+      setMotorSpeeds();
 
-    // Send out the transform braodcast
-    broadcastTf();
+      // Publish odometry
+      odom.updateAndPublish(distLeft, distRight)
+      
+    }
   }
 
-  // handle any data movements across the erial interface  
+  // handle any data movements across the erial interface
   nh.spinOnce();
 }
 
@@ -231,7 +222,7 @@ void cmd_velCallback( const geometry_msgs::Twist& twist_msg) {
   //              (The "x" axis points forward.)
   //    angular.y is the rotation about the z or vertical
   //              axis in radians per second.
-  //   
+  //
   float vel_x   = twist_msg.linear.x;
   float vel_th  = twist_msg.angular.z;
 
@@ -251,31 +242,71 @@ void cmd_velCallback( const geometry_msgs::Twist& twist_msg) {
   rightSetpoint = right_vel;
 }
 
-void broadcastTf(){
+void setMotorSpeeds() {
+  // Set the controler based on calulation from PID
+  byte direction;
+  int  speed;
+
+  speed  = int(0.5 + fabs(leftOutput)
+  if (     leftOutput >  0.001) {
+  direction = CW;
+}
+else if (leftOutput < -0.001) {
+  direction = CCW;
+}
+else {
+  direction = BRAKEGND;
+  speed = 0;
+}
+moto.motorGo(LEFT_MOTOR, direction, speed);
+
+speed  = int(0.5 + fabs(rightOutput)
+if (     rightOutput >  0.001) {
+  direction = CW;
+}
+else if (rightOutput < -0.001) {
+  direction = CCW;
+}
+else {
+  direction = BRAKEGND;
+  speed = 0;
+}
+moto.motorGo(RIGHT_MOTOR, direction, speed);
+}
+
+void broadcastTf() {
   t.header.frame_id = odom;
   t.child_frame_id = base_link;
-  t.transform.translation.x = 1.0; 
+  t.transform.translation.x = 1.0;
   t.transform.rotation.x = 0.0;
-  t.transform.rotation.y = 0.0; 
-  t.transform.rotation.z = 0.0; 
-  t.transform.rotation.w = 1.0;  
+  t.transform.rotation.y = 0.0;
+  t.transform.rotation.z = 0.0;
+  t.transform.rotation.w = 1.0;
   t.header.stamp = nh.now();
   broadcaster.sendTransform(t);
 }
 
-void displayStatus(float *vel_x, float *vel_th){
+void displayStatus(float *vel_x, float *vel_th) {
 #if LCD
   // set the cursor (column, line)
   lcd.setCursor(0, 0);
   lcd.print("X");
   lcd.print(*vel_x);
-  
+
   lcd.setCursor(0, 1);
   lcd.print("T");
   lcd.print(*vel_th);
 #endif //LCD
 }
 
+bool encoderJump(long enc_left, long enc_right) {
 
+  if ((abs(enc_left f - _last_enc_left)  > 20000) |
+      (abs(enc_right - _last_enc_right) > 20000)) {
 
-  
+    // TODO: Log this
+    // "Ignoring encoder jump"
+    return TRUE;
+  }
+  return FALSE;
+}
