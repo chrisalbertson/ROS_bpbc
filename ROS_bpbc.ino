@@ -1,5 +1,7 @@
 
 
+
+
 /*
     ROS-bpbc.ino
     ROS Blue Pill Base Controler
@@ -66,7 +68,7 @@ const float base_width = 0.3;
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
 
-Odometer odom(nh, meterPerTick, base_width, float(PID_PERIOD)/1000.0);
+Odometer odo(nh, meterPerTick, base_width, float(PID_PERIOD)/1000.0);
 
 
 
@@ -93,7 +95,7 @@ PID rightWheelPID(&rightInput, &rightOutput, &rightSetpoint, Kp, Ki, Kd, DIRECT)
 
 // Uses an LCD is optional but make it easy to see what is happening and is
 // the only way to show status if there is not ROS computer connected
-#define HAVE_LCD 0
+#define HAVE_LCD 1
 #if HAVE_LCD
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -226,7 +228,7 @@ void loop() {
       setMotorSpeeds();
 
       // Publish odometry
-      odom.update_publish(current_time, distLeft, distRight);
+      odo.update_publish(current_time, distLeft, distRight);
     }
   }
 
