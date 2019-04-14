@@ -30,6 +30,11 @@
 #include <tf/transform_broadcaster.h>
 
 #include "EncoderBP.h"
+#include "odometry.h"
+
+ros::NodeHandle  nh;
+
+#define PID_PERIOD 100
 
 // TODO: Change these pin numbers to the pins connected to your encoder.
 //       All pins should have interrupt capability
@@ -56,10 +61,12 @@ void ispRight() {
 // meter per encoder tick is wheel circumfrence / encoder ticks per wheel revoution
 const float meterPerTick = (0.13 * 3.1415) / (75.0 * 64.0);
 
+const float base_width = 0.3; 
+
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
 
-Odometer odom(ticks_per_meter, base_width);
+Odometer odom(nh, meterPerTick, base_width, float(PID_PERIOD)/1000.0);
 
 
 
@@ -86,7 +93,7 @@ PID rightWheelPID(&rightInput, &rightOutput, &rightSetpoint, Kp, Ki, Kd, DIRECT)
 
 // Uses an LCD is optional but make it easy to see what is happening and is
 // the only way to show status if there is not ROS computer connected
-#define HAVE_LCD 1
+#define HAVE_LCD 0
 #if HAVE_LCD
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -97,16 +104,15 @@ LiquidCrystal_I2C lcd(0x38);  // Set the LCD I2C address
 void cmd_velCallback( const geometry_msgs::Twist& toggle_msg);
 void broadcastTf();
 
-// Create a ROS node and subscribe to Twist messages on cmd_vel.
-ros::NodeHandle  nh;
+// Subscribe to Twist messages on cmd_vel.
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", &cmd_velCallback);
 
 // Setup   transfomer broadcaster.  This is very much automated
 // We just need to feed it data which we get from wheel encoders
-geometry_msgs::TransformStamped t;
-tf::TransformBroadcaster broadcaster;
-char base_link[] = "/base_link";
-char odom[]      = "/odom";
+//geometry_msgs::TransformStamped t;
+//tf::TransformBroadcaster broadcaster;
+//char base_link[] = "/base_link";
+//char odom[]      = "/odom";
 
 
 // millisecond to delay in main loop
@@ -126,11 +132,12 @@ void setup() {
   leftSetpoint  = 0.0;
   rightSetpoint = 0.0;
 
+
 #if HAVE_LCD
   // before talking to ROS or anything else, set up uyjer LCD
   lcd.begin(16, 2);
   lcd.setCursor(0, 1);
-  lcd.print("Hello");
+  lcd.print("Connecting...");
   //         0000000000111111
   //         1234567890123456
 #endif // HAVE_LCD 
@@ -149,16 +156,28 @@ void setup() {
   leftWheelPID.SetMode(AUTOMATIC);
   rightWheelPID.SetMode(AUTOMATIC);
 
-  // Connect to ROS computer and start the FT brodcastr
+  // Connect to ROS computer and wait for connection
   nh.initNode();
-  broadcaster.init(nh);
+  while (!nh.connected()) {
+    nh.spinOnce();
+  }
+
+#if HAVE_LCD
+  lcd.setCursor(0, 1);
+  lcd.print("Connected      ");
+  //         0000000000111111
+  //         1234567890123456
+#endif // HAVE_LCD 
+
+  // First log message.
+  nh.loginfo("ROS_bpbc stating...");
 
 }
 
 
 // The PID period is independent from the loop() period.  This defines
 // the time between updates to the motor speed.
-#define PID_PERIOD 100
+//#define PID_PERIOD 100
 unsigned long NextPIDMillis = 0;
 
 
@@ -180,16 +199,24 @@ void loop() {
     long encLeft  = encoderLeft.getPos();
     long encRight = encoderRight.getPos();
 
-    if (!odem.encoderJump(encLeft,  encoderLeftLastValue
-                          encRight, encoderRightLastValue)) {
+    if (encoderJump(encLeft,  encoderLeftLastValue,
+                    encRight, encoderRightLastValue)) {
+
+      nh.logwarn("Encoder jump detected.");
+    }
+    else {
+
+      // No encoderjump detected.  Do the "normal" cycle
 
       // Figure out how far we have gone then convert
       // this distance to velocity and send it to the PID controler.
-      float distLeft  = meterPerTick * float(encLeft  - encoderLeftLastValue)
-      float distRight = meterPerTick * float(encRight - encoderRightLastValue)
+      float distLeft  = meterPerTick * float(encLeft  - encoderLeftLastValue);
+      float distRight = meterPerTick * float(encRight - encoderRightLastValue);
       leftInput  = distLeft  / float(1000 * PID_PERIOD);
       rightInput = distRight / float(1000 * PID_PERIOD);
 
+      // Capture the time when encoders were read.
+      ros::Time current_time = nh.now();
 
       // re-compute the the motor drive based on previous measured speed.
       // The PID control tries to keep the motor runing at a constant
@@ -199,8 +226,7 @@ void loop() {
       setMotorSpeeds();
 
       // Publish odometry
-      odom.updateAndPublish(distLeft, distRight)
-      
+      odom.update_publish(current_time, distLeft, distRight);
     }
   }
 
@@ -247,44 +273,33 @@ void setMotorSpeeds() {
   byte direction;
   int  speed;
 
-  speed  = int(0.5 + fabs(leftOutput)
-  if (     leftOutput >  0.001) {
-  direction = CW;
-}
-else if (leftOutput < -0.001) {
-  direction = CCW;
-}
-else {
-  direction = BRAKEGND;
-  speed = 0;
-}
-moto.motorGo(LEFT_MOTOR, direction, speed);
+  speed  = int(0.5 + fabs(leftOutput));
+  if (leftOutput >  0.001) {
+    direction = CW;
+  }
+  else if (leftOutput < -0.001) {
+    direction = CCW;
+  }
+  else {
+    direction = BRAKEGND;
+    speed = 0;
+  }
+  moto.motorGo(LEFT_MOTOR, direction, speed);
 
-speed  = int(0.5 + fabs(rightOutput)
-if (     rightOutput >  0.001) {
-  direction = CW;
-}
-else if (rightOutput < -0.001) {
-  direction = CCW;
-}
-else {
-  direction = BRAKEGND;
-  speed = 0;
-}
-moto.motorGo(RIGHT_MOTOR, direction, speed);
+  speed  = int(0.5 + fabs(rightOutput));
+  if (rightOutput >  0.001) {
+    direction = CW;
+  }
+  else if (rightOutput < -0.001) {
+    direction = CCW;
+  }
+  else {
+    direction = BRAKEGND;
+    speed = 0;
+  }
+  moto.motorGo(RIGHT_MOTOR, direction, speed);
 }
 
-void broadcastTf() {
-  t.header.frame_id = odom;
-  t.child_frame_id = base_link;
-  t.transform.translation.x = 1.0;
-  t.transform.rotation.x = 0.0;
-  t.transform.rotation.y = 0.0;
-  t.transform.rotation.z = 0.0;
-  t.transform.rotation.w = 1.0;
-  t.header.stamp = nh.now();
-  broadcaster.sendTransform(t);
-}
 
 void displayStatus(float *vel_x, float *vel_th) {
 #if LCD
@@ -299,14 +314,15 @@ void displayStatus(float *vel_x, float *vel_th) {
 #endif //LCD
 }
 
-bool encoderJump(long enc_left, long enc_right) {
+bool encoderJump(long enc_left,  long last_enc_left,
+                 long enc_right, long last_enc_right) {
 
-  if ((abs(enc_left f - _last_enc_left)  > 20000) |
-      (abs(enc_right - _last_enc_right) > 20000)) {
+  if ((abs(enc_left  - last_enc_left)  > 20000) ||
+      (abs(enc_right - last_enc_right) > 20000)) {
 
     // TODO: Log this
     // "Ignoring encoder jump"
-    return TRUE;
+    return true;
   }
-  return FALSE;
+  return false;
 }

@@ -1,16 +1,59 @@
+/*
+    odametry.cpp
+    Send odom messages and broadcast TF
+
+    Author Chris Albertson  albertson.chris@gmail.com
+    Copyright April 2019
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 
 #include "odometry.h"
 
-void Odometer::update_publish(float distLeft, float distRight) {
+char base_link[] = "/base_link";
+char odom[]      = "/odom";
+
+nav_msgs::Odometry odomMsg;
+ros::Publisher     odom_pub(odom, &odomMsg);
+
+geometry_msgs::TransformStamped t;
+tf::TransformBroadcaster tfBroadcaster;
+
+
+Odometer::Odometer(ros::NodeHandle &nh, float metersPerTick, float base_width, float deltaTime){
+  _metersPerTick = metersPerTick;
+  _base_width    = base_width;
+  _d_time        = deltaTime;
+  _cur_x         = 0.0;
+  _cur_y         = 0.0;
+  _cur_theta     = 0.0;
+
+  tfBroadcaster.init(nh);
+}
+       
+
+void Odometer::update_publish(ros::Time current_time, const float distLeft, const float distRight) {
 
   float vel_x;
   float vel_theta;
 
-  update(distLeft, distRight, &vel_x, &vel_theta);
-  publish_odom(vel_x, vel_theta);
+  update_odom(distLeft, distRight, vel_x, vel_theta);
+  publish_odom(current_time, vel_x, vel_theta);
+  broadcastTf(current_time);
 }
 
-void Odometer::update(float distLeft, float distRight, float& vel_x, float& vel_theta) {
+void Odometer::update_odom(float distLeft, float distRight, float& vel_x, float& vel_theta) {
 
   float dist;
   float d_theta;
@@ -44,49 +87,50 @@ void Odometer::update(float distLeft, float distRight, float& vel_x, float& vel_
 }
 
 
-void Odometer::publish_odom(float vx, float vth) {
+void Odometer::publish_odom(ros::Time current_time, float vx, float vth) {
   
-  quat = tf.transformations.quaternion_from_euler(0, 0, cur_theta);
-  current_time = rospy.Time.now();
+//  quat = tf.transformations.quaternion_from_euler(0, 0, _cur_theta);
+//  quat = tf::createQuaternionFromYaw(cur_theta);
+//  current_time = nh.now();
 
-  br = tf.TransformBroadcaster();
-  br.sendTransform((cur_x, cur_y, 0),
-                   tf.transformations.quaternion_from_euler(0, 0, -cur_theta),
-                   current_time,
-                   "base_link",
-                   "odom");
+ 
+  odomMsg.header.stamp          = current_time;
+  odomMsg.header.frame_id       = odom;
+  odomMsg.child_frame_id        = base_link;
+  odomMsg.pose.pose.position.x  = _cur_x;
+  odomMsg.pose.pose.position.y  = _cur_y;
+  odomMsg.pose.pose.position.z  = 0.0;
+  odomMsg.pose.pose.orientation = tf::createQuaternionFromYaw(_cur_theta);
 
-  odom = Odometry();
-  odom.header.stamp = current_time;
-  odom.header.frame_id = 'odom';
+  odomMsg.twist.twist.linear.x  = vx;
+  odomMsg.twist.twist.linear.y  = 0;
+  odomMsg.twist.twist.angular.z = vth;
 
-  odom.pose.pose.position.x = _cur_x;
-  odom.pose.pose.position.y = _cur_y;
-  odom.pose.pose.position.z = 0.0;
-  odom.pose.pose.orientation = Quaternion(*quat);
-
-  odom.pose.covariance[0] = 0.01;
-  odom.pose.covariance[7] = 0.01;
-  odom.pose.covariance[14] = 99999;
-  odom.pose.covariance[21] = 99999;
-  odom.pose.covariance[28] = 99999;
-  odom.pose.covariance[35] = 0.01;
-
-  odom.child_frame_id = 'base_link';
-  odom.twist.twist.linear.x = vx;
-  odom.twist.twist.linear.y = 0;
-  odom.twist.twist.angular.z = vth;
-  odom.twist.covariance = odom.pose.covariance;
-
-  odom_pub.publish(odom);
+  odom_pub.publish(&odomMsg);
 }
 
-void Odometer::normalize_angle(float angle) {
-  while (angle > pi) {
-    angle -= 2.0 * pi
+
+void Odometer::broadcastTf(ros::Time current_time) {
+
+  t.header.stamp            = current_time;
+  t.header.frame_id         = odom;
+  t.child_frame_id          = base_link;
+  t.transform.translation.x = _cur_x;
+  t.transform.translation.y = _cur_y;
+  t.transform.translation.z = 0.0;
+  t.transform.rotation      = tf::createQuaternionFromYaw(-_cur_theta);
+  
+  
+  tfBroadcaster.sendTransform(t);
+}
+
+
+float Odometer::normalize_angle(float angle) {
+  while (angle > PI) {
+    angle -= 2.0 * PI;
   }
-  while (angle < -pi) {
-    angle += 2.0 * pi;
+  while (angle < -PI) {
+    angle += 2.0 * PI;
   }
   return angle;
 }
