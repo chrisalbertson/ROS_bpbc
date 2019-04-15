@@ -34,6 +34,12 @@
 #include "EncoderBP.h"
 #include "odometry.h"
 
+// needed on nucleo
+// HardwareSerial Serial1(PA10, PA9);
+
+// need for stm32arduino
+#define LED_BUILTIN PC13
+
 ros::NodeHandle  nh;
 
 #define PID_PERIOD 100
@@ -41,10 +47,10 @@ ros::NodeHandle  nh;
 // TODO: Change these pin numbers to the pins connected to your encoder.
 //       All pins should have interrupt capability
 
-#define ENCPIN1A 1
-#define ENCPIN1B 2
-#define ENCPIN2A 3
-#define ENCPIN2B 4
+#define ENCPIN1A PB5
+#define ENCPIN1B PB6
+#define ENCPIN2A PB7
+#define ENCPIN2B PB8
 
 EncoderBP encoderLeft( ENCPIN1A, ENCPIN1B);
 EncoderBP encoderRight(ENCPIN2A, ENCPIN2B);
@@ -63,12 +69,12 @@ void ispRight() {
 // meter per encoder tick is wheel circumfrence / encoder ticks per wheel revoution
 const float meterPerTick = (0.13 * 3.1415) / (75.0 * 64.0);
 
-const float base_width = 0.3; 
+const float base_width = 0.3;
 
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
 
-Odometer odo(nh, meterPerTick, base_width, float(PID_PERIOD)/1000.0);
+Odometer odo(nh, meterPerTick, base_width, float(PID_PERIOD) / 1000.0);
 
 
 
@@ -93,13 +99,13 @@ double Kp = 2, Ki = 5, Kd = 1;
 PID leftWheelPID( &leftInput,  &leftOutput,  &leftSetpoint,  Kp, Ki, Kd, DIRECT);
 PID rightWheelPID(&rightInput, &rightOutput, &rightSetpoint, Kp, Ki, Kd, DIRECT);
 
-// Uses an LCD is optional but make it easy to see what is happening and is
+// An LCD is optional but make it easy to see what is happening and is
 // the only way to show status if there is not ROS computer connected
-#define HAVE_LCD 1
+#define HAVE_LCD 0
 #if HAVE_LCD
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-LiquidCrystal_I2C lcd(0x38);  // Set the LCD I2C address
+LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 #endif // HAVE_LCD
 
 // Functions declaratons (silly C-language requirement)
@@ -109,45 +115,33 @@ void broadcastTf();
 // Subscribe to Twist messages on cmd_vel.
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", &cmd_velCallback);
 
-// Setup   transfomer broadcaster.  This is very much automated
-// We just need to feed it data which we get from wheel encoders
-//geometry_msgs::TransformStamped t;
-//tf::TransformBroadcaster broadcaster;
-//char base_link[] = "/base_link";
-//char odom[]      = "/odom";
-
 
 // millisecond to delay in main loop
 #define LOOPDELAY 1
 
-
+static bool ledState;
 
 
 // This is an Arduino convention.  Place everything that needs to run just
 // once in the setup() funtion.  The environment will call setup()
 void setup() {
 
-  // The very first thing we need to do is make sure the motors are
-  // stopped.  Call the driver directly and also set the PID setpoints.
+  // initialize digital pin LED_BUILTIN as an output.
+  pinMode(LED_BUILTIN, OUTPUT);
+  flashLED(3);
+
+  // Make sure the motors are stopped.
+  // Call the driver directly and also set the PID setpoints.
   moto.motorOff(LEFT_MOTOR);
   moto.motorOff(RIGHT_MOTOR);
   leftSetpoint  = 0.0;
   rightSetpoint = 0.0;
 
 
-#if HAVE_LCD
-  // before talking to ROS or anything else, set up uyjer LCD
-  lcd.begin(16, 2);
-  lcd.setCursor(0, 1);
-  lcd.print("Connecting...");
-  //         0000000000111111
-  //         1234567890123456
-#endif // HAVE_LCD 
-
-
   // Set up interrupt on encoder pins.   NOte the function ispLeft and ispRight
   // are required by the Arduino sysem because ISPs can not be non-static class
   // members.
+  flashLED(4);
   attachInterrupt(ENCPIN1A, ispLeft,  CHANGE);
   attachInterrupt(ENCPIN1B, ispLeft,  CHANGE);
   attachInterrupt(ENCPIN2A, ispRight, CHANGE);
@@ -159,21 +153,12 @@ void setup() {
   rightWheelPID.SetMode(AUTOMATIC);
 
   // Connect to ROS computer and wait for connection
+  flashLED(5);
   nh.initNode();
-  while (!nh.connected()) {
-    nh.spinOnce();
-  }
+  
 
-#if HAVE_LCD
-  lcd.setCursor(0, 1);
-  lcd.print("Connected      ");
-  //         0000000000111111
-  //         1234567890123456
-#endif // HAVE_LCD 
 
-  // First log message.
-  nh.loginfo("ROS_bpbc stating...");
-
+  flashLED(6);
 }
 
 
@@ -191,9 +176,11 @@ void loop() {
   // The PID runs every PID_PERIOD milliseconds,  Check if it is time
   if (millis() >= NextPIDMillis) {
 
-
     // It is time to run, store the NEXT tine to run.
     NextPIDMillis = millis() + PID_PERIOD;
+
+    // blink the LED to show we are alive
+    toggleLED();
 
     // Read the encoders.  If some kind of error has caused a jump by
     // and unreasonable amout we do NOT want to use the encoder value.
@@ -204,7 +191,6 @@ void loop() {
     if (encoderJump(encLeft,  encoderLeftLastValue,
                     encRight, encoderRightLastValue)) {
 
-      nh.logwarn("Encoder jump detected.");
     }
     else {
 
@@ -259,7 +245,7 @@ void cmd_velCallback( const geometry_msgs::Twist& twist_msg) {
   double right_vel =  vel_x + vel_th * width_robot / 2.0;
 
   // Show the Twist message on the LCD.
-  displayStatus(&vel_x, &vel_th);
+  //displayStatus(&vel_x, &vel_th);
 
   // The PID works in unit of meters per second, so no
   // conversion is needed.  The motor speeds will be adjusted
@@ -302,9 +288,8 @@ void setMotorSpeeds() {
   moto.motorGo(RIGHT_MOTOR, direction, speed);
 }
 
-
-void displayStatus(float *vel_x, float *vel_th) {
 #if LCD
+void displayStatus(float *vel_x, float *vel_th) {
   // set the cursor (column, line)
   lcd.setCursor(0, 0);
   lcd.print("X");
@@ -313,8 +298,8 @@ void displayStatus(float *vel_x, float *vel_th) {
   lcd.setCursor(0, 1);
   lcd.print("T");
   lcd.print(*vel_th);
-#endif //LCD
 }
+#endif //LCD
 
 bool encoderJump(long enc_left,  long last_enc_left,
                  long enc_right, long last_enc_right) {
@@ -327,4 +312,28 @@ bool encoderJump(long enc_left,  long last_enc_left,
     return true;
   }
   return false;
+}
+
+
+void toggleLED() {
+  if (ledState) {
+    digitalWrite(LED_BUILTIN, LOW);
+    ledState = false;
+  }
+  else {
+    digitalWrite(LED_BUILTIN, HIGH);
+    ledState = true;
+  }
+}
+
+void flashLED(int count) {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  for (int i=0; i<count; i++) {
+    digitalWrite(LED_BUILTIN, LOW);  // LOW turns on LED. The BluePill is backwards
+    delay(50);
+    digitalWrite(LED_BUILTIN, HIGH);
+    ledState = true;
+    delay(200);
+  }
 }

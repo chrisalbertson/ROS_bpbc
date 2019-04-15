@@ -62,7 +62,7 @@ void Odometer::update_odom(float distLeft, float distRight, float& vel_x, float&
 
   // Check for the special case of driving in a straight line
   // then compute current loation relativeto previous location
-  if abs((distRight - distLeft) < (dist / 1000.0)) {
+  if (abs((distRight - distLeft) < (dist / 1000.0))) {
 
     // drove in sraight line
     d_theta = 0.0;
