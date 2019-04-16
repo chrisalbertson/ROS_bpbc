@@ -2,9 +2,9 @@
 #ifndef ODOMETRY_H
 #define ODOMETRY_H
 
-#include <ArduinoHardware.h>
-#include <Arduino.h>
-#include <ros.h>
+// Include local version of ros.h, not the system version
+#include "ros.h" 
+
 #include <ros/time.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Twist.h>
@@ -16,7 +16,9 @@
 
 class Odometer {
   public:
-  Odometer(ros::NodeHandle &nh, float metersPerTick, float base_width, float deltaTime);
+  Odometer(const float metersPerTick, const float base_width, const float deltaTime);
+
+  void setupPubs(ros::NodeHandle &nh);
   
   void update_publish(ros::Time current_time, float distLeft, float distRight);
       

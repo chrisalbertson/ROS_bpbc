@@ -31,14 +31,17 @@ geometry_msgs::TransformStamped t;
 tf::TransformBroadcaster tfBroadcaster;
 
 
-Odometer::Odometer(ros::NodeHandle &nh, float metersPerTick, float base_width, float deltaTime){
+Odometer::Odometer(const float metersPerTick, const float base_width, const float deltaTime){
   _metersPerTick = metersPerTick;
   _base_width    = base_width;
   _d_time        = deltaTime;
   _cur_x         = 0.0;
   _cur_y         = 0.0;
   _cur_theta     = 0.0;
+}
 
+void Odometer::setupPubs(ros::NodeHandle &nh) {
+  nh.advertise(odom_pub);
   tfBroadcaster.init(nh);
 }
        

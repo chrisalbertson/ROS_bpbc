@@ -23,9 +23,17 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <ArduinoHardware.h>
-#include <Arduino.h>
-#include <ros.h>
+// This file is needed to fool the Arduino build system into lookning
+// in .../Aduino/Libraries/ for other #include files.   The file ros_lib.h
+// is empty except for a comment.
+// Note the this is not needed if we use the system <ros.h> but is only
+// needed if a local "ros.h" isused.
+#include <ros_lib.h>
+
+// Include local version of ros.h, not the system version
+#include "ros.h" 
+
+
 #include <ros/time.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Twist.h>
@@ -34,11 +42,12 @@
 #include "EncoderBP.h"
 #include "odometry.h"
 
-// needed on nucleo
-// HardwareSerial Serial1(PA10, PA9);
 
 // need for stm32arduino
 #define LED_BUILTIN PC13
+#define LED_ON  LOW
+#define LED_OFF HIGH 
+static bool ledState;
 
 ros::NodeHandle  nh;
 
@@ -68,13 +77,13 @@ void ispRight() {
 // TODO:  meterPerTick needs to be computed from parameters in setup()
 // meter per encoder tick is wheel circumfrence / encoder ticks per wheel revoution
 const float meterPerTick = (0.13 * 3.1415) / (75.0 * 64.0);
-
 const float base_width = 0.3;
+const float PeriodSeconds = float(PID_PERIOD) / 1000.0;
 
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
 
-Odometer odo(nh, meterPerTick, base_width, float(PID_PERIOD) / 1000.0);
+Odometer odo(meterPerTick, base_width, PeriodSeconds);
 
 
 
@@ -113,14 +122,11 @@ void cmd_velCallback( const geometry_msgs::Twist& toggle_msg);
 void broadcastTf();
 
 // Subscribe to Twist messages on cmd_vel.
-ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", &cmd_velCallback);
+ros::Subscriber<geometry_msgs::Twist> sub_cmd_vel("cmd_vel", &cmd_velCallback);
 
 
 // millisecond to delay in main loop
 #define LOOPDELAY 1
-
-static bool ledState;
-
 
 // This is an Arduino convention.  Place everything that needs to run just
 // once in the setup() funtion.  The environment will call setup()
@@ -128,7 +134,6 @@ void setup() {
 
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_BUILTIN, OUTPUT);
-  flashLED(3);
 
   // Make sure the motors are stopped.
   // Call the driver directly and also set the PID setpoints.
@@ -141,7 +146,6 @@ void setup() {
   // Set up interrupt on encoder pins.   NOte the function ispLeft and ispRight
   // are required by the Arduino sysem because ISPs can not be non-static class
   // members.
-  flashLED(4);
   attachInterrupt(ENCPIN1A, ispLeft,  CHANGE);
   attachInterrupt(ENCPIN1B, ispLeft,  CHANGE);
   attachInterrupt(ENCPIN2A, ispRight, CHANGE);
@@ -153,12 +157,15 @@ void setup() {
   rightWheelPID.SetMode(AUTOMATIC);
 
   // Connect to ROS computer and wait for connection
-  flashLED(5);
   nh.initNode();
+
+  // Advertize odometry and transform
+  odo.setupPubs(nh);
+
+  // Subscribe to cmd_vel
+  nh.subscribe(sub_cmd_vel);
   
-
-
-  flashLED(6);
+  nh.loginfo("starting...");
 }
 
 
@@ -188,25 +195,29 @@ void loop() {
     long encLeft  = encoderLeft.getPos();
     long encRight = encoderRight.getPos();
 
-    if (encoderJump(encLeft,  encoderLeftLastValue,
-                    encRight, encoderRightLastValue)) {
-
-    }
-    else {
-
+    if (!encoderJump(encLeft,  encoderLeftLastValue,
+                     encRight, encoderRightLastValue)) {
+    
       // No encoderjump detected.  Do the "normal" cycle
 
       // Figure out how far we have gone then convert
       // this distance to velocity and send it to the PID controler.
+      //
+      // distLeft and distRight are a distance in meters that were traveled
+      // from the  last time we read the encoders.  The values can be postive
+      // or negative depending on the direction the wheel moved.
+      //
+      // leftInput and rightInput are the average velocity in meters per second
+      // that were traveled durring the last sample period.
       float distLeft  = meterPerTick * float(encLeft  - encoderLeftLastValue);
       float distRight = meterPerTick * float(encRight - encoderRightLastValue);
-      leftInput  = distLeft  / float(1000 * PID_PERIOD);
-      rightInput = distRight / float(1000 * PID_PERIOD);
+      leftInput  = distLeft  / PeriodSeconds;
+      rightInput = distRight / PeriodSeconds;
 
       // Capture the time when encoders were read.
       ros::Time current_time = nh.now();
 
-      // re-compute the the motor drive based on previous measured speed.
+      // re-compute the motor drive power based on previous measured speed.
       // The PID control tries to keep the motor runing at a constant
       // setpoint speed.  Input and Output are global variables
       leftWheelPID.Compute();
@@ -216,9 +227,13 @@ void loop() {
       // Publish odometry
       odo.update_publish(current_time, distLeft, distRight);
     }
+
+    // Save values for "next time".
+    encoderLeftLastValue  = encLeft;
+    encoderRightLastValue = encRight;
   }
 
-  // handle any data movements across the erial interface
+  // handle any data movements across the serial interface
   nh.spinOnce();
 }
 
@@ -317,23 +332,25 @@ bool encoderJump(long enc_left,  long last_enc_left,
 
 void toggleLED() {
   if (ledState) {
-    digitalWrite(LED_BUILTIN, LOW);
-    ledState = false;
+    digitalWrite(LED_BUILTIN, LED_ON);   
   }
   else {
-    digitalWrite(LED_BUILTIN, HIGH);
-    ledState = true;
+    digitalWrite(LED_BUILTIN, LED_OFF);
   }
+  ledState = !ledState;
 }
 
+/*  Used for debugging
+ *   
 void flashLED(int count) {
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, LED_OFF);
   delay(1000);
   for (int i=0; i<count; i++) {
-    digitalWrite(LED_BUILTIN, LOW);  // LOW turns on LED. The BluePill is backwards
+    digitalWrite(LED_BUILTIN, LED_ON);
     delay(50);
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_BUILTIN, LED_OFF);
     ledState = true;
     delay(200);
   }
 }
+*/
