@@ -23,15 +23,19 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <ros_lib.h>
+#include "NUC_ros.h"
+
 // This file is needed to fool the Arduino build system into lookning
 // in .../Aduino/Libraries/ for other #include files.   The file ros_lib.h
 // is empty except for a comment.
 // Note the this is not needed if we use the system <ros.h> but is only
 // needed if a local "ros.h" isused.
-#include <ros_lib.h>
+//#include <ros_lib.h>
 
 // Include local version of ros.h, not the system version
-#include "ros.h" 
+//#include "ros.h" 
+
 
 
 #include <ros/time.h>
@@ -41,28 +45,22 @@
 
 #include "EncoderBP.h"
 #include "odometry.h"
+#include "pin_assign.h"
 
 
-// need for stm32arduino
-#define LED_BUILTIN PC13
-#define LED_ON  LOW
-#define LED_OFF HIGH 
+// need for Blu-Pill" board
+//#define LED_BUILTIN PC13
+#define LED_ON  HIGH
+#define LED_OFF LOW 
 static bool ledState;
 
 ros::NodeHandle  nh;
 
 #define PID_PERIOD 100
 
-// TODO: Change these pin numbers to the pins connected to your encoder.
-//       All pins should have interrupt capability
 
-#define ENCPIN1A PB5
-#define ENCPIN1B PB6
-#define ENCPIN2A PB7
-#define ENCPIN2B PB8
-
-EncoderBP encoderLeft( ENCPIN1A, ENCPIN1B);
-EncoderBP encoderRight(ENCPIN2A, ENCPIN2B);
+EncoderBP encoderLeft( ENC1A, ENC1B);
+EncoderBP encoderRight(ENC2A, ENC2B);
 
 
 // The followont two funtions look pointless but are required by the Arduino
@@ -146,10 +144,10 @@ void setup() {
   // Set up interrupt on encoder pins.   NOte the function ispLeft and ispRight
   // are required by the Arduino sysem because ISPs can not be non-static class
   // members.
-  attachInterrupt(ENCPIN1A, ispLeft,  CHANGE);
-  attachInterrupt(ENCPIN1B, ispLeft,  CHANGE);
-  attachInterrupt(ENCPIN2A, ispRight, CHANGE);
-  attachInterrupt(ENCPIN2B, ispRight, CHANGE);
+  attachInterrupt(ENC1A, ispLeft,  CHANGE);
+  attachInterrupt(ENC1B, ispLeft,  CHANGE);
+  attachInterrupt(ENC2A, ispRight, CHANGE);
+  attachInterrupt(ENC2B, ispRight, CHANGE);
 
 
   // Start PID controlers. All we need next is data

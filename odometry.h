@@ -2,8 +2,12 @@
 #ifndef ODOMETRY_H
 #define ODOMETRY_H
 
+
+#include <ros_lib.h>
+#include "NUC_ros.h"
+
 // Include local version of ros.h, not the system version
-#include "ros.h" 
+//#include "ros.h" 
 
 #include <ros/time.h>
 #include <nav_msgs/Odometry.h>
@@ -25,8 +29,9 @@ class Odometer {
 
 private:
 
-void  update_odom(float distLeft, float distRight, float& vel_x, float& vel_theta);
-void  publish_odom(ros::Time current_time, float vx, float vth);
+void  update_odom(const float distLeft, const float distRight, float& vel_x, float& vel_theta);
+void  update_kinematics(const float distLeft, const float distRight, float& vel_x, float& vel_theta);
+void  publish_odom(ros::Time current_time, const float vx, const float vth);
 void  broadcastTf(ros::Time current_time);
 float normalize_angle(float angle);
 

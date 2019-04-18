@@ -8,9 +8,6 @@
 MonsterMoto::MonsterMoto()
 {
 
-  
-  pinMode(statpin, OUTPUT);
-
   // Initialize digital pins as outputs
   for (int i=0; i<2; i++)
   {
@@ -79,4 +76,3 @@ void MonsterMoto::motorGo(byte motor, byte direct, int pwm)
     }
   }
 }
-

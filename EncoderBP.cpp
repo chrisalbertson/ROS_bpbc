@@ -1,9 +1,9 @@
 
-#include "Arduino.h"
+#include <Arduino.h>
 #include "EncoderBP.h"
 
-
-const int8_t dirTable[] = {
+// Using "static" limis the scope to just this *.cpp file
+static const int8_t dirTable[] = {
    0, -1,  1,  0,
    1,  0,  0, -1,
   -1,  0,  0,  1,
@@ -19,6 +19,8 @@ const int8_t dirTable[] = {
   pinMode(pin2, INPUT_PULLUP);
 
   // It actualy takes a few microseconds for the pullups to settle
+  // (It is OK to do a delay here as this constructor is never called
+  // from inside a loop.)
   delay(1);
 
   int val1 = digitalRead(_pin1);
