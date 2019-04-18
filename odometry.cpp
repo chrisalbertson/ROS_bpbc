@@ -65,7 +65,9 @@ void Odometer::update_odom(const float distLeft, const float distRight, float& v
 
   // Check for the special case of driving in a straight line
   // then compute current loation relative to previous location
-  if (abs(distRight - distLeft) < (dist / 1000.0)) {
+
+  // If the difference in distance is under 2mm/Second we call it a straight line
+  if (abs(distRight - distLeft) < (0.002 / _d_time)) {
 
     // drove in sraight line
     d_theta = 0.0;
@@ -119,11 +121,6 @@ void Odometer::update_kinematics(const float leftDelta, const float rightDelta, 
 }
 
 void Odometer::publish_odom(ros::Time current_time, const float vx, const float vth) {
-
-    //  quat = tf.transformations.quaternion_from_euler(0, 0, _cur_theta);
-    //  quat = tf::createQuaternionFromYaw(cur_theta);
-    //  current_time = nh.now();
-
 
     odomMsg.header.stamp          = current_time;
     odomMsg.header.frame_id       = odom;
