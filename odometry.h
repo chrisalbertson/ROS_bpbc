@@ -17,36 +17,31 @@
 #include <tf/tf.h>
 
 
-
 class Odometer {
   public:
-  Odometer(const float metersPerTick, const float base_width, const float deltaTime);
+  Odometer(const float metersPerTick, const float base_width);
 
   void setupPubs(ros::NodeHandle &nh);
   
-  void update_publish(ros::Time current_time, float distLeft, float distRight);
+  void update_publish(ros::Time current_time, const float odoInterval, const float distLeft, const float distRight);
       
 
 private:
 
-void  update_odom(const float distLeft, const float distRight, float& vel_x, float& vel_theta);
+void  update_odom(const float odoInterval, 
+                  const float distLeft, const float distRight, float& vel_x, float& vel_theta);
+                  
 void  update_kinematics(const float distLeft, const float distRight, float& vel_x, float& vel_theta);
 void  publish_odom(ros::Time current_time, const float vx, const float vth);
 void  broadcastTf(ros::Time current_time);
 float normalize_angle(float angle);
 
 
-
 float _metersPerTick;
 float _base_width;  // Meters
-
-float _d_time;      // Seconds
 
 float _cur_x;       // Meters
 float _cur_y;       // Meters
 float _cur_theta;   // Radians
-
-
-
 };
 #endif /* ODOMETRY_H */

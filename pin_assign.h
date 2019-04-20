@@ -18,10 +18,10 @@
 #define MM_PWM2 PB10  // D6   PWM Speed Control
 
 // Encoders              CN7  Description
-#define ENC1A   PC10  // 1    Motor 1 Phase A
-#define ENC1B   PC12  // 3    Motor 1 Phase B
-#define ENC2A   PA13  // 13   Motor 2 Phase A
-#define ENC2B   PA14  // 15   Motor 2 Phase B
+#define ENC2A   PC10  // 1    Motor 1 Phase A
+#define ENC2B   PC12  // 3    Motor 1 Phase B
+#define ENC1A   PA13  // 13   Motor 2 Phase A
+#define ENC1B   PA14  // 15   Motor 2 Phase B
 //
 //
 // Pin locations on CN7.  Note there is a "dot" printed nere pin #1

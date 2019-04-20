@@ -1,25 +1,28 @@
 
-#include "Arduino.h"
+#include <Arduino.h>
 #include "MonsterMoto.h"
 
 
 
-
-MonsterMoto::MonsterMoto()
+// This shoud go in constructor but there is a silly limitation with
+// Arduino and calling pinMode in a constuctor.  See the link below
+// http://wiki.stm32duino.com/index.php?title=API#Important_information_about_global_constructor_methods
+void MonsterMoto::setup()
 {
-
   // Initialize digital pins as outputs
   for (int i=0; i<2; i++)
   {
     pinMode(inApin[i], OUTPUT);
     pinMode(inBpin[i], OUTPUT);
     pinMode(pwmpin[i], OUTPUT);
+    pinMode(enpin[i],  OUTPUT);
   }
-  // Initialize braked
+  // Initialize braked and enabled
   for (int i=0; i<2; i++)
   {
     digitalWrite(inApin[i], LOW);
     digitalWrite(inBpin[i], LOW);
+    digitalWrite(enpin[i],  HIGH);
   }
 }
 
@@ -74,5 +77,6 @@ void MonsterMoto::motorGo(byte motor, byte direct, int pwm)
       
       analogWrite(pwmpin[motor], pwm);
     }
+    digitalWrite(enpin[motor],  HIGH);
   }
 }

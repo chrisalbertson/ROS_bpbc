@@ -14,6 +14,8 @@ class EncoderBP
 
     EncoderBP(int pin1, int pin2);
 
+    void setup();
+
     // get the current position
     long  getPos() {
       return _position;

@@ -31,10 +31,9 @@ geometry_msgs::TransformStamped t;
 tf::TransformBroadcaster tfBroadcaster;
 
 
-Odometer::Odometer(const float metersPerTick, const float base_width, const float deltaTime) {
+Odometer::Odometer(const float metersPerTick, const float base_width) {
   _metersPerTick = metersPerTick;
   _base_width    = base_width;
-  _d_time        = deltaTime;
   _cur_x         = 0.0;
   _cur_y         = 0.0;
   _cur_theta     = 0.0;
@@ -46,17 +45,19 @@ void Odometer::setupPubs(ros::NodeHandle &nh) {
 }
 
 
-void Odometer::update_publish(ros::Time current_time, const float distLeft, const float distRight) {
+void Odometer::update_publish(ros::Time current_time, const float odoInterval, 
+                              const float distLeft, const float distRight) {
 
   float vel_x;
   float vel_theta;
 
-  update_odom(distLeft, distRight, vel_x, vel_theta);
+  update_odom(odoInterval, distLeft, distRight, vel_x, vel_theta);
   publish_odom(current_time, vel_x, vel_theta);
   broadcastTf(current_time);
 }
 
-void Odometer::update_odom(const float distLeft, const float distRight, float& vel_x, float& vel_theta) {
+void Odometer::update_odom(const float odoInterval, const float distLeft,const float distRight, 
+                          float& vel_x, float& vel_theta) {
 
   float dist;
   float d_theta;
@@ -67,7 +68,7 @@ void Odometer::update_odom(const float distLeft, const float distRight, float& v
   // then compute current loation relative to previous location
 
   // If the difference in distance is under 2mm/Second we call it a straight line
-  if (abs(distRight - distLeft) < (0.002 / _d_time)) {
+  if (abs(distRight - distLeft) < (0.002 * odoInterval)) {
 
     // drove in sraight line
     d_theta = 0.0;
@@ -85,8 +86,8 @@ void Odometer::update_odom(const float distLeft, const float distRight, float& v
     _cur_theta = normalize_angle(_cur_theta + d_theta);
   }
 
-  vel_x     = dist    / _d_time;
-  vel_theta = d_theta / _d_time;
+  vel_x     = dist    / odoInterval;
+  vel_theta = d_theta / odoInterval;
 
   return;
 }

@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "EncoderBP.h"
 
-// Using "static" limis the scope to just this *.cpp file
+// Using "static" limits the scope to just this *.cpp file
 static const int8_t dirTable[] = {
    0, -1,  1,  0,
    1,  0,  0, -1,
@@ -13,10 +13,16 @@ static const int8_t dirTable[] = {
   
   _pin1 = pin1;
   _pin2 = pin2;
+  _position = 0;
+}
+
+// Need this because of silly STM32 Arduino limitataion there
+// pinMode() can not be called from a global constuctor
+void EncoderBP::setup() {
   
   // Setup the input pins
-  pinMode(pin1, INPUT_PULLUP);
-  pinMode(pin2, INPUT_PULLUP);
+  pinMode(_pin1, INPUT_PULLUP);
+  pinMode(_pin2, INPUT_PULLUP);
 
   // It actualy takes a few microseconds for the pullups to settle
   // (It is OK to do a delay here as this constructor is never called

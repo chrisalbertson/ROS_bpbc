@@ -17,7 +17,8 @@
 class MonsterMoto
 {
   public:
-    MonsterMoto();
+    MonsterMoto(){}
+    void setup();
     void motorOff(byte motor);
     void motorGo(byte motor, byte direct, int pwm);
    
