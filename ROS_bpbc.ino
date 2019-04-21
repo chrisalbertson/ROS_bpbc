@@ -151,13 +151,13 @@ void setup() {
   // Set up interrupt on encoder pins.   NOte the function ispLeft and ispRight
   // are required by the Arduino sysem because ISPs can not be non-static class
   // members.
-  attachInterrupt(ENC1A, ispLeft,  CHANGE);
-  attachInterrupt(ENC1B, ispLeft,  CHANGE);
-  attachInterrupt(ENC2A, ispRight, CHANGE);
-  attachInterrupt(ENC2B, ispRight, CHANGE);
-
   encoderLeft.setup();
   encoderRight.setup();
+  attachInterrupt(digitalPinToInterrupt(ENC1A), ispLeft,  CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENC1B), ispLeft,  CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENC2A), ispRight, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENC2B), ispRight, CHANGE);
+
 
 
   // Start PID controlers. All we need next is data
