@@ -56,8 +56,8 @@ static bool ledState;
 
 ros::NodeHandle  nh;
 
-#define ODO_PERIOD 400  // Millis between /tf and /odom publication
-#define PID_PERIOD 250  // Millis between each PID calculation
+#define ODO_PERIOD 250  // Millis between /tf and /odom publication
+#define PID_PERIOD 100  // Millis between each PID calculation
 
 
 EncoderBP encoderLeft( ENC1A, ENC1B);
@@ -76,8 +76,8 @@ void ispRight() {
 // TODO:  meterPerTick needs to be computed from parameters in setup()
 // meter per encoder tick is wheel circumfrence / encoder ticks per wheel revoution
 //const float meterPerTick = (0.13 * 3.1415) / (75.0 * 64.0); // Thumper
-const float meterPerTick = .00075625; // Woodie
-const float base_width = 0.3;
+const float meterPerTick = .00037812; // Woodie
+const float base_width = 0.195;       // Woodie
 
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
@@ -100,8 +100,8 @@ double leftSetpoint = 0.0;
 double leftInput,  leftOutput;
 double rightSetpoint = 0.0;
 double rightInput, rightOutput;
-//double Kp = 2, Ki = 5, Kd = 1;
-double Kp = 10, Ki = 20, Kd = 1;
+
+double Kp = 60, Ki = 100, Kd = 1;
 
 // Create one PID object for each motor.  The Input and output units
 // will be "meters"
@@ -130,8 +130,13 @@ ros::Subscriber<geometry_msgs::Twist> sub_cmd_vel("cmd_vel", &cmd_velCallback);
 // once in the setup() funtion.  The environment will call setup()
 void setup() {
 
+  // Set the PWM frequency so the sound is not so anoyying
+  // TODO remove the comment fromthe below after version 1.6.0 of the STM32 Core is released.
+  //      This funtion is not available in 1.5.0
+  // analogWriteFrequency(6000);
+
   // This should be in constuctor but there is a limtation.  See this link
-  // http://wiki.stm32duino.com/index.php?title=API#Important_information_about_global_constructor_methods
+  // http://wiki.stm32duino.com/indx.php?title=API#Important_information_about_global_constructor_methods
   moto.setup();
 
   // TEST FUNTION <<<< DEBUG >>>>
@@ -233,13 +238,6 @@ void loop() {
   if (leftWheelPID.Compute()) {
     setMotorSpeed(LEFT_MOTOR, leftOutput);
     
-
-    //DEBUG
-    char lp_buff[100];
-    snprintf (lp_buff, sizeof(lp_buff), "LPID %f, %f, %f, %f, %d, %d",
-              leftInput, leftOutput, leftSetpoint, distLeft, encLeft, encoderLeftLastValuePid );
-    nh.loginfo(lp_buff);
-    
     encoderLeftLastValuePid = encLeft;
     millis_last_LEFT = curMillis;
   }
@@ -260,13 +258,6 @@ void loop() {
   // and /odom publication rate.
   if (rightWheelPID.Compute()) {
     setMotorSpeed(RIGHT_MOTOR, rightOutput);
-
-    
-    //DEBUG
-    char rp_buff[100];
-    snprintf (rp_buff, sizeof(rp_buff), "RPID %f, %f, %f, %f, %d, %d",
-              rightInput, rightOutput, rightSetpoint, distRight, encRight, encoderRightLastValuePid );
-    nh.loginfo(rp_buff);
     
     encoderRightLastValuePid = encRight;
     millis_last_RIGHT = curMillis;
@@ -322,10 +313,7 @@ void cmd_velCallback( const geometry_msgs::Twist& twist_msg) {
   float left_vel  =  vel_x - (vel_th * base_width / 2.0);
   float right_vel =  vel_x + (vel_th * base_width / 2.0);
 
-  //DEBUG
-  char cv_buff[40];
-  snprintf (cv_buff, sizeof(cv_buff), "CMDVEL %f, %f", left_vel, right_vel);
-  nh.loginfo(cv_buff);
+  
   
 
   // Show the Twist message on the LCD.
@@ -345,10 +333,10 @@ void setMotorSpeed(byte motor, float pidOutput) {
 
   int speed  = int(0.5 + fabs(pidOutput));
   
-  if (pidOutput >  0.001) {
+  if (pidOutput >  2.2) {
     direction = CW;
   }
-  else if (pidOutput < -0.001) {
+  else if (pidOutput < -2.2) {
     direction = CCW;
   }
   else {
@@ -371,20 +359,6 @@ void displayStatus(float *vel_x, float *vel_th) {
 }
 #endif //LCD
 
-bool encoderJump(long enc_left,  long last_enc_left,
-                 long enc_right, long last_enc_right) {
-
-  if ((abs(enc_left  - last_enc_left)  > 20000) ||
-      (abs(enc_right - last_enc_right) > 20000)) {
-
-    // TODO: Log this
-    // "Ignoring encoder jump"
-    return true;
-  }
-  return false;
-}
-
-
 void toggleLED() {
   if (ledState) {
     digitalWrite(LED_BUILTIN, LED_ON);
@@ -393,44 +367,4 @@ void toggleLED() {
     digitalWrite(LED_BUILTIN, LED_OFF);
   }
   ledState = !ledState;
-}
-
-/*  Used for debugging
-
-  void flashLED(int count) {
-  digitalWrite(LED_BUILTIN, LED_OFF);
-  delay(1000);
-  for (int i=0; i<count; i++) {
-    digitalWrite(LED_BUILTIN, LED_ON);
-    delay(50);
-    digitalWrite(LED_BUILTIN, LED_OFF);
-    ledState = true;
-    delay(200);
-  }
-  }
-*/
-
-//>>>>>>>>>>> DEBUG TEST FUNTIONS FOLLOW <<<<<<<<<<<<<
-//Remove this in released code
-
-void MotorTest() {
-
-  while (1) {
-    for (int i = 0; i < 10; i++) {
-      moto.motorGo(LEFT_MOTOR,  CW, 10);
-      moto.motorGo(RIGHT_MOTOR, CW, 100);
-      delay(1000);
-    }
-    
-    moto.motorOff(LEFT_MOTOR);
-    moto.motorOff(RIGHT_MOTOR);
-    delay(5000);
-    
-    for (int i = 0; i < 10; i++) {
-      moto.motorGo(LEFT_MOTOR,  CCW, 100);
-      moto.motorGo(RIGHT_MOTOR, CCW, 10);
-      delay(1000);
-    }
-    
-  }
 }
