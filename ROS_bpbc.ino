@@ -101,7 +101,8 @@ double leftInput,  leftOutput;
 double rightSetpoint = 0.0;
 double rightInput, rightOutput;
 
-double Kp = 60, Ki = 100, Kd = 1;
+//double Kp = 60, Ki = 100, Kd = 1;  //  Usable but not respncive enough
+double Kp = 40.0, Ki = 0.0, Kd = 0.0;
 
 // Create one PID object for each motor.  The Input and output units
 // will be "meters"
@@ -138,9 +139,6 @@ void setup() {
   // This should be in constuctor but there is a limtation.  See this link
   // http://wiki.stm32duino.com/indx.php?title=API#Important_information_about_global_constructor_methods
   moto.setup();
-
-  // TEST FUNTION <<<< DEBUG >>>>
-  // MotorTest();
 
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_BUILTIN, OUTPUT);
@@ -309,12 +307,20 @@ void cmd_velCallback( const geometry_msgs::Twist& twist_msg) {
   float vel_x   = twist_msg.linear.x;
   float vel_th  = twist_msg.angular.z;
 
+  // This is a "hack".  It turns ou the motors have a minimum
+  // speed because of internal friction.   If the commanded speed is
+  // below a threshold we replace the commanded speed with zero.
+  // TODO:  Find a better threshold, make it a parameter
+  if (fabs(vel_x)  < 0.001) vel_x  = 0.0;
+  if (fabs(vel_th) < 0.001) vel_th = 0.0;
+
   // Compute the wheel speeds in meters per second.
   float left_vel  =  vel_x - (vel_th * base_width / 2.0);
   float right_vel =  vel_x + (vel_th * base_width / 2.0);
 
-  
-  
+  //char buff[40];
+  //snprintf(buff, 100, "CMD_VEL %f, %f", left_vel, right_vel);
+  //nh.loginfo(buff);
 
   // Show the Twist message on the LCD.
   //displayStatus(&vel_x, &vel_th);
@@ -333,10 +339,10 @@ void setMotorSpeed(byte motor, float pidOutput) {
 
   int speed  = int(0.5 + fabs(pidOutput));
   
-  if (pidOutput >  2.2) {
+  if (pidOutput >  4.0) {
     direction = CW;
   }
-  else if (pidOutput < -2.2) {
+  else if (pidOutput < -4.0) {
     direction = CCW;
   }
   else {
