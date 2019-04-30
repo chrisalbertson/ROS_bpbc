@@ -21,8 +21,9 @@
 
 #include "odometry.h"
 
-char base_link[] = "/base_link";
-char odom[]      = "/odom";
+// Frame names.
+char base_link[] = "base_link";
+char odom[]      = "odom";
 
 nav_msgs::Odometry odomMsg;
 ros::Publisher     odom_pub(odom, &odomMsg);

@@ -1,5 +1,10 @@
 
-
+// HOW TO COMPILE With Arduino IDE
+// 1. Must use STM32 "Core"
+// 2. Board: is "Nucleo64"
+// 3. Board Part Number: "Nucleo F4xxRE"
+// 4. U(S)ART  "Enabled (generic serial)"
+// 5. USB Support: "None"
 
 
 /*
@@ -23,9 +28,6 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <ros_lib.h>
-#include "NUC_ros.h"
-
 // This file is needed to fool the Arduino build system into lookning
 // in .../Aduino/Libraries/ for other #include files.   The file ros_lib.h
 // is empty except for a comment.
@@ -35,7 +37,8 @@
 
 // Include local version of ros.h, not the system version
 //#include "ros.h"
-
+#include <ros_lib.h>
+#include "NUC_ros.h"
 
 
 #include <ros/time.h>
