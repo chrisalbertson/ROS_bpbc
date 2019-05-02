@@ -59,8 +59,8 @@ static bool ledState;
 
 ros::NodeHandle  nh;
 
-#define ODO_PERIOD 250  // Millis between /tf and /odom publication
-#define PID_PERIOD 100  // Millis between each PID calculation
+#define ODO_PERIOD 200  // Millis between /tf and /odom publication
+#define PID_PERIOD  50  // Millis between each PID calculation
 
 
 EncoderBP encoderLeft( ENC1A, ENC1B);
@@ -79,8 +79,9 @@ void ispRight() {
 // TODO:  meterPerTick needs to be computed from parameters in setup()
 // meter per encoder tick is wheel circumfrence / encoder ticks per wheel revoution
 //const float meterPerTick = (0.13 * 3.1415) / (75.0 * 64.0); // Thumper
-const float meterPerTick = .00037812; // Woodie
-const float base_width = 0.195;       // Woodie
+
+const float meterPerTick = 0.0003828125;  // Woodie
+const float base_width   = 0.195;         // Woodie
 
 long encoderLeftLastValue  = 0L;
 long encoderRightLastValue = 0L;
@@ -209,7 +210,7 @@ void loop() {
   float distRight;
 
   
-  // Three things run here all on their own shcedule
+  // Three things run here all on their own schedule
   //  1.  The Left Wheel PID controler
   //  2.  The Right Wheel PID controler
   //  3.  The Odometry and TF publisher
@@ -328,8 +329,6 @@ void cmd_velCallback( const geometry_msgs::Twist& twist_msg) {
   // Show the Twist message on the LCD.
   //displayStatus(&vel_x, &vel_th);
 
-  // The PID controller needs to know which way the wheels are spinning
-  
   // The PID works in units of meters per second, so no
   // conversion is needed.
   leftSetpoint  = left_vel;
@@ -338,14 +337,15 @@ void cmd_velCallback( const geometry_msgs::Twist& twist_msg) {
 
 void setMotorSpeed(byte motor, float pidOutput) {
   // Set the controler based on calulation from PID
+  const float deadZone = 0.5;
   byte direction;
 
   int speed  = int(0.5 + fabs(pidOutput));
   
-  if (pidOutput >  4.0) {
+  if (pidOutput >  deadZone) {
     direction = CW;
   }
-  else if (pidOutput < -4.0) {
+  else if (pidOutput < -deadZone) {
     direction = CCW;
   }
   else {
